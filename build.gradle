@@ -6,7 +6,7 @@ repositories {
 }
 
 dependencies {
-	compile 'org.apache.httpcomponents:httpclient:4.2.3'
+    compile 'org.apache.httpcomponents:httpclient:4.3.1'
 	compile 'org.apache.commons:commons-io:1.3.2'
 }
 
@@ -21,4 +21,20 @@ task fatJar(type: Jar, dependsOn: jar) {
 	from { 
 		configurations.runtime.collect { it.isDirectory() ? it : zipTree(it) } 
 	}
+}
+
+
+task stressJar(type: Jar, dependsOn: fatJar) {
+	baseName = 'hornetstress'
+    
+	manifest {
+		attributes 'Main-Class': 'com.cubiclegrizzly.hornetstress.HornetHive'
+	}
+
+    from './build/classes/main' include '**/*.class'
+
+	from {
+		configurations.runtime.collect { it.isDirectory() ? it : zipTree(it) } 
+	}
+
 }
