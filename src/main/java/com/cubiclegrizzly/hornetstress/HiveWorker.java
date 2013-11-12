@@ -1,5 +1,6 @@
 package com.cubiclegrizzly.hornetstress;
 
+import javax.net.ssl.HttpsURLConnection;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.util.Random;
@@ -10,8 +11,18 @@ import org.apache.http.client.methods.HttpHead;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.DefaultHttpClient;
 
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.conn.ssl.SSLContexts;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.X509TrustManager;
+import java.security.cert.X509Certificate;
+import javax.net.ssl.TrustManager;
+import java.security.cert.*;
+import java.security.SecureRandom;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 
-public class HiveWorker implements Runnable {
+public class HiveWorker implements Runnable{
 
     private String rootURL;
     private int acceptWait = 10; // "-1" will disable.
@@ -48,16 +59,33 @@ public class HiveWorker implements Runnable {
         running = false;
     }
 
+
+
     private void makeCall() {
         try {
+            // Create a trust manager that does not validate certificate chains
+            TrustManager[] trustAllCerts = new TrustManager[]{
+                new X509TrustManager(){
+                    public X509Certificate[] getAcceptedIssuers() { return null;}
+                    public void checkClientTrusted(X509Certificate[] certs, String authType){}
+                    public void checkServerTrusted(X509Certificate[] certs, String authType){}
+                }};
+
             // There is a default sleep here so that we don't flood the hell out of httpd
             // on startup.
             Random r = new Random(STARTUP_SLEEP);
             Integer startSleep = r.nextInt(10000);
             Thread.sleep(startSleep);
 
+
+            // IGNORE all certificates please. Just open the SSL and do your thing....
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, trustAllCerts, new SecureRandom());
+            SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(sslContext,SSLConnectionSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER);
+
             // TODO figure out how to obliterate SSL validation and allow over https/443
-            DefaultHttpClient client = new DefaultHttpClient();
+            // Crash: Done!
+            CloseableHttpClient client = HttpClients.custom().setSSLSocketFactory(sslsf).build();
 
             // Get the head request.
             // This will send back the "msg-pull-subscriptions" header.
@@ -119,7 +147,7 @@ public class HiveWorker implements Runnable {
                 } else {
                     // Something horrible has happened.
                     HivePrinter.printErr(mID, "UNKNOWN STATUS CODE: " + postResp.getStatusLine().toString() +
-                            "\n" + IOUtils.toString(postResp.getEntity().getContent()));
+                                         "\n" + IOUtils.toString(postResp.getEntity().getContent()));
                     return;
                 }
 
